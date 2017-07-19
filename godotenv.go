@@ -16,11 +16,15 @@ package godotenv
 import (
 	"bufio"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 )
+
+const doubleQuoteSpecialChars = "\\\n\r\"!$`"
 
 // Load will read your env file(s) and load them into ENV for this process.
 //
@@ -107,6 +111,31 @@ func Exec(filenames []string, cmd string, cmdArgs []string) error {
 	return command.Run()
 }
 
+// Write serializes the given environment and writes it to a file
+func Write(envMap map[string]string, filename string) error {
+	content, error := WriteString(envMap)
+	if error != nil {
+		return error
+	}
+	file, error := os.Create(filename)
+	if error != nil {
+		return error
+	}
+	_, err := file.WriteString(content)
+	return err
+}
+
+// WriteString outputs the given environment as a dotenv-formatted environment file.
+//
+// Each line is in the format: KEY="VALUE" where VALUE is backslash-escaped.
+func WriteString(envMap map[string]string) (string, error) {
+	lines := make([]string, 0, len(envMap))
+	for k, v := range envMap {
+		lines = append(lines, fmt.Sprintf(`%s="%s"`, k, doubleQuoteEscape(v)))
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
 func filenamesOrDefault(filenames []string) []string {
 	if len(filenames) == 0 {
 		return []string{".env"}
@@ -142,11 +171,18 @@ func readFile(filename string) (envMap map[string]string, err error) {
 		return
 	}
 	defer file.Close()
+	return read(file)
+}
 
+func readString(content string) (envMap map[string]string, err error) {
+	return read(strings.NewReader(content))
+}
+
+func read(r io.Reader) (envMap map[string]string, err error) {
 	envMap = make(map[string]string)
 
 	var lines []string
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
@@ -257,4 +293,18 @@ func parseValue(value string) string {
 func isIgnoredLine(line string) bool {
 	trimmedLine := strings.Trim(line, " \n\t")
 	return len(trimmedLine) == 0 || strings.HasPrefix(trimmedLine, "#")
+}
+
+func doubleQuoteEscape(line string) string {
+	for _, c := range doubleQuoteSpecialChars {
+		toReplace := "\\" + string(c)
+		if c == '\n' {
+			toReplace = `\n`
+		}
+		if c == '\r' {
+			toReplace = `\r`
+		}
+		line = strings.Replace(line, string(c), toReplace, -1)
+	}
+	return line
 }
