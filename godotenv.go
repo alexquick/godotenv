@@ -94,6 +94,11 @@ func Read(filenames ...string) (envMap map[string]string, err error) {
 	return
 }
 
+// ReadString parses an environment file from dotenv file contents returning it as a map
+func ReadString(content string) (envMap map[string]string, err error) {
+	return read(strings.NewReader(content))
+}
+
 // Exec loads env vars from the specified filenames (empty map falls back to default)
 // then executes the cmd specified.
 //
@@ -172,10 +177,6 @@ func readFile(filename string) (envMap map[string]string, err error) {
 	}
 	defer file.Close()
 	return read(file)
-}
-
-func readString(content string) (envMap map[string]string, err error) {
-	return read(strings.NewReader(content))
 }
 
 func read(r io.Reader) (envMap map[string]string, err error) {
